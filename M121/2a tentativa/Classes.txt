@@ -1,0 +1,225 @@
+
+Chapter 0:
+
+
+> The concept of Pipelines
+- Pipelines are a composition of stages.
+- Stages are configurable to produce desirable result through transformations.
+- Stages can be arranged in multiple ways.
+
+> Aggregation Structure and Syntax
+Concepts:
+	- aggregation operators ($match, $project...)
+	- query operators ($gt, $lt)
+	
+	Field path: "$numberOfMoons" (fieldName)
+	System variable: "$$CURRENT" (uppercase)
+	User variable: "$$foo"
+	
+	Expressions: like functions, parameters are inputs that are used to produce an output result.
+	Example: $gt: ["$numberOfMoons", 0]
+		$gt function is receiving two parameters and return a result (if it's greater than).
+		
+Chapter 1:
+
+> $match stage
+
+Homework 1:
+
+db.movies.aggregate([
+	{
+		$match: {
+			"imdb.rating": {$gte: 7},
+			"genres": {$nin: ["Crime", "Horror"]},
+			"rated": {$in: ["PG", "G"]},
+			"languages": {$all: ["English", "Japanese"]}
+		}
+	}
+]).itcount()
+
+db.movies.aggregate([
+	{
+		$match: {
+			$and: [
+				{ "imdb.rating": {$gte: 7} },
+				{ "genres": {$nin: ["Crime", "Horror"]} },
+				{ "rated": {$in: ["PG", "G"]} },
+				{ "languages": {$all: ["English", "Japanese"]} }
+			]			
+		}
+	}
+]).itcount()
+
+> $project stage
+
+- aggregation expressions are used.
+- each value that we wish to retain(show) should be explicity set.
+- if we want to exclude the id field, it should be explicity excluded (_id: 0).
+
+db.solarSystem.aggregate([ {$project: {"_id":0, "name":1, "gravity.value":1 }} ]).pretty();
+db.solarSystem.aggregate([ {$project: {"_id":0, "name":1, "surfaceGrafity": "$gravity.value" }} ]).pretty();
+
+Meu peso em cada planeta do sistema solar:
+O resultado da divisão da gravidade do planeta pela gravidade do planeta Terra (9,8) é multiplicado pelo meu peso em kg.
+db.solarSystem.aggregate([ {$project: {"_id":0, "name":1, "myWeight": {$multiply: [ {$divide: ["$gravity.value", 9.8]}, 52] } } } ]).pretty();
+
+Homework 1:
+
+db.movies.aggregate([
+	{
+		$match: {
+			"imdb.rating": {$gte: 7},
+			"genres": {$nin: ["Crime", "Horror"]},
+			"rated": {$in: ["PG", "G"]},
+			"languages": {$all: ["English", "Japanese"]}
+		}
+	}, 
+	{
+		$project: {
+			"_id":0,
+			"title": 1,
+			"rated": 1
+		}
+	}
+])
+
+Homework 2:
+
+db.movies.aggregate([
+	{
+		$project: {
+			"_id":0,
+			"title": 1,
+			"titleSentence": { $eq: [ {$size: {$split: ["$title", " "]}}, 1 ]  }
+		}
+	},
+	{
+		$match: {
+			"titleSentence": {$eq: true}
+		}
+	}
+]).itcount();
+
+Chapter 2:
+
+> $addFields
+
+- Similar to $project, but does not need to remove fields explicitly, it needs only to add the fields you want to show.
+- It can be combined to $project within the aggregation pipeline.
+
+> $geoNear
+
+- First stage in the aggregation pipeline.
+- Use example: I can find, through a query, what are the 5 different hospitals that are near to my office location (given my coordinates).
+
+> cursor-like stages
+
+Examples cursor stages:
+db.solarSystem.find({}, {"_id":0, "name":1, "numberOfMoons": 1}).count(); // total 9
+db.solarSystem.find({}, {"_id":0, "name":1, "numberOfMoons": 1}).skip(5).pretty(); // "pula" os 5 primeiros elementos e exibe os próximos 
+db.solarSystem.find({}, {"_id":0, "name":1, "numberOfMoons": 1}).limit(4).pretty(); // limita o retorno para apenas 4 elementos
+db.solarSystem.find({}, {"_id":0, "name":1, "numberOfMoons": 1}).sort({"numberOfMoons": -1}).pretty(); // faz um sort por ordem decrescente de acordo com num de luas
+
+Example of cursor-like stages in the aggregation pipeline:
+db.solarSystem.aggregate([
+	{
+		$project: {
+			"_id": 0,
+			"name": 1,
+			"numberOfMoons":1
+		}
+	},
+	{
+		$limit: 5
+	}
+]).pretty()
+
+db.solarSystem.aggregate([
+	{
+		$project: {
+			"_id": 0,
+			"name": 1,
+			"numberOfMoons":1
+		}
+	},
+	{
+		$skip: 1
+	}
+]).pretty()
+
+db.solarSystem.aggregate([
+	{
+		$match: {
+			"type": "Terrestrial planet"
+		}
+	},
+	{
+		$count: "planets"
+	}
+])
+
+db.solarSystem.aggregate([
+	{
+		$project: {
+			"_id": 0,
+			"name": 1,
+			"hasMagneticField": 1,
+			"numberOfMoons": 1
+		}
+	},
+	{
+		$sort: {"hasMagneticField": -1, "numberOfMoons": -1}
+	}
+]).pretty()
+
+-> By default $sort will only use 100MB of RAM memory, for more than this you can use "allowDiskUse": true
+
+> $sample stage
+
+- Select a set of random documents from a collection.
+- Useful when working with very large collections.
+
+Example:
+db.nyFacilities.aggregate([ {$sample: {size: 200}} ])
+
+Homework 1:
+
+var favorites = ["Sandra Bullock", "Tom Hanks", "Julia Roberts", "Kevin Spacey", "George Clooney"];
+db.movies.aggregate([
+	{
+		$match: {
+			$and: [
+				{"tomatoes.viewer.rating": {$exists: true}},
+				{"tomatoes.viewer.rating": {$gte: 3}}
+			],
+			"countries": { $all: ["USA"] },
+			$and: [
+				{"cast": {$exists: true}},
+				{"cast": {$in: favorites}}
+			]
+		}
+	}, 
+	{
+		$project: {
+			"_id":0,
+			"title": 1,
+			"tomatoes.viewer.rating": 1,
+			"cast": 1,
+			"countries": 1,
+			"num_favs": { $size: { $setIntersection: ["$cast", favorites] } }
+		}
+	},
+	{
+		$sort: {
+			"num_favs": -1,
+			"tomatoes.viewer.rating": -1,
+			"title": -1
+		}
+	},
+	{ $limit: 26},
+	{ $skip: 25}
+]).pretty()
+
+Homework 2:
+
+
