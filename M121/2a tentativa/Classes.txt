@@ -222,4 +222,56 @@ db.movies.aggregate([
 
 Homework 2:
 
+var x_max = 1521105
+var x_min = 5
+var min = 1
+var max = 10
+db.movies.aggregate([
+	{
+		$match: {
+			"released": {$gte: ISODate("1990-01-01T00:00:00Z")},
+			$and: [
+				{"languages": {$exists: true} },
+				{"languages": {$in: ["English"]} }
+			],
+			"imdb.rating": {$gte: 1}
+		}
+	},
+	{
+		$project: {
+			"_id":0,
+			"title": 1,
+			"released": 1,
+			"normalized_rating": { $avg: [
+					{
+						$add: [
+						  1,
+						  {
+							$multiply: [
+							  9,
+							  {
+								$divide: [
+								  { $subtract: ["$imdb.votes", x_min] },
+								  { $subtract: [x_max, x_min] }
+								]
+							  }
+							]
+						  }
+						]
+					},
+					"$imdb.rating"
+				]
+			}
+		}
+	},
+	{
+		$match: {
+			"normalized_rating": {$gte: 1}
+		}
+	},
+	{
+		$sort: {normalized_rating: 1}
+		
+	}
+]).pretty()
 

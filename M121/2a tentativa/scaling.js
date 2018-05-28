@@ -40,41 +40,4 @@ x = imdb.votes
 // yes, you can use $avg in $project and $addFields!
 normalized_rating = average(scaled_votes, imdb.rating)
 
-var x_max = 1521105
-var x_min = 5
-var min = 1
-var max = 10
-db.movies.aggregate([
-	{
-		$match: {
-			"released": {$gte: ISODate("1990-01-01T00:00:00Z")},
-			$and: [
-				{"languages": {$exists: true} },
-				{"languages": {$in: ["English"]} }
-			]
-		}
-	},
-	{
-		$project: {
-			"_id":0,
-			"title": 1,
-			"released": 1,
-			"scaled_votes": {
-				$add: [
-				  1,
-				  {
-					$multiply: [
-					  9,
-					  {
-						$divide: [
-						  { $subtract: ["$imdb.votes", x_min] },
-						  { $subtract: [x_max, x_min] }
-						]
-					  }
-					]
-				  }
-				]
-			}
-		}
-	}
-]).pretty()
+
