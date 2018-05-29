@@ -100,6 +100,27 @@ db.movies.aggregate([
 	}
 ]).itcount();
 
+db.movies.aggregate([
+  {
+    $match: {
+      title: {
+        $type: "string"
+      }
+    }
+  },
+  {
+    $project: {
+      title: { $split: ["$title", " "] },
+      _id: 0
+    }
+  },
+  {
+    $match: {
+      title: { $size: 1 }
+    }
+  }
+]).itcount()
+
 Chapter 2:
 
 > $addFields
@@ -220,6 +241,43 @@ db.movies.aggregate([
 	{ $skip: 25}
 ]).pretty()
 
+var favorites = ["Sandra Bullock", "Tom Hanks", "Julia Roberts", "Kevin Spacey", "George Clooney"];
+db.movies.aggregate([
+  {
+    $match: {
+      "tomatoes.viewer.rating": { $gte: 3 },
+      countries: "USA",
+      cast: {
+        $in: favorites
+      }
+    }
+  },
+  {
+    $project: {
+      _id: 0,
+      title: 1,
+      "tomatoes.viewer.rating": 1,
+      num_favs: {
+        $size: {
+          $setIntersection: [
+            "$cast",
+            favorites
+          ]
+        }
+      }
+    }
+  },
+  {
+    $sort: { num_favs: -1, "tomatoes.viewer.rating": -1, title: -1 }
+  },
+  {
+    $skip: 24
+  },
+  {
+    $limit: 1
+  }
+])
+
 Homework 2:
 
 var x_max = 1521105
@@ -243,6 +301,7 @@ db.movies.aggregate([
 			"title": 1,
 			"released": 1,
 			"normalized_rating": { $avg: [
+					"$imdb.rating",
 					{
 						$add: [
 						  1,
@@ -258,8 +317,7 @@ db.movies.aggregate([
 							]
 						  }
 						]
-					},
-					"$imdb.rating"
+					}
 				]
 			}
 		}
@@ -275,3 +333,144 @@ db.movies.aggregate([
 	}
 ]).pretty()
 
+db.movies.aggregate([
+  {
+    $match: {
+      year: { $gte: 1990 },
+      languages: { $in: ["English"] },
+      "imdb.votes": { $gte: 1 },
+      "imdb.rating": { $gte: 1 }
+    }
+  },
+  {
+    $project: {
+      _id: 0,
+      title: 1,
+      "imdb.rating": 1,
+      "imdb.votes": 1,
+      normalized_rating: {
+        $avg: [
+          "$imdb.rating",
+          {
+            $add: [
+              1,
+              {
+                $multiply: [
+                  9,
+                  {
+                    $divide: [
+                      { $subtract: ["$imdb.votes", 5] },
+
+                      { $subtract: [1521105, 5] }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    }
+  },
+  { $sort: { normalized_rating: 1 } },
+  { $limit: 1 }
+])
+
+Chapter 3:
+
+> $group stage
+
+- Can be used multiple times within a pipeline.
+
+> accumulators (operators that mantain their state as the documents progress through the pipeline)
+
+- $sum, $max e $min
+- $stdDevPop e $stdDevSamp
+
+Homework 1:
+
+db.movies.aggregate([
+	{
+		$match: {
+			$and: [
+				{"awards": { $regex: /^Won */}},
+				{"awards": { $regex: /Oscar */}},
+			]
+		}
+	},
+	{
+		$project: {
+			"standard_deviation": { $stdDevSamp: "$imdb.rating"},
+			"highest_rating": {$max: "$imdb.rating"},
+			"lowest_rating": {$min: "$imdb.rating"},
+			"avg_rating": {$avg: "$imdb.rating"}
+		}
+	}
+
+]).pretty();
+
+db.movies.aggregate([
+	{
+		$match: {
+			$and: [
+				{"awards": { $regex: /^Won */}},
+				{"awards": { $regex: /Oscar */}},
+			]
+		}
+	},
+	{
+		$group: {
+			"_id": {},
+			"standard_deviation": { $stdDevSamp: "$imdb.rating"},
+			"highest_rating": {$max: "$imdb.rating"},
+			"lowest_rating": {$min: "$imdb.rating"},
+			"avg_rating": {$avg: "$imdb.rating"}
+		}
+	}
+
+]).pretty();
+
+Homework 2:
+
+db.movies.aggregate([
+	{
+		$match: { 
+			"languages": {$in: ["English"]}
+		}
+	},
+	{
+		$unwind: "$cast"
+	},
+	{
+		$group: {
+			"_id": {
+				"cast": "$cast"
+			},
+			"num_movies": {$sum: 1},
+			"rating": {$avg: "$imdb.rating"}
+		}
+	},
+	{
+		$sort: {"num_movies": -1}
+	}
+]).pretty();
+
+> $lookup stage
+
+- Combine information from different collections together
+
+Homework 3:
+
+db.air_alliances.aggregate([
+	{
+		$unwind: "$airlines"
+	},
+	{
+		$lookup: {
+			"from": "air_routes",
+			"localField": "airlines",
+			"foreignField": "airline.name",
+			"as": "rotas"
+		}
+	},
+]).pretty();
